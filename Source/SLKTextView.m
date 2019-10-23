@@ -506,9 +506,32 @@ SLKPastableMediaType SLKPastableMediaTypeFromNSString(NSString *string)
 {
     NSString *contentSizeCategory = [[UIApplication sharedApplication] preferredContentSizeCategory];
     
-    [self setFontName:font.fontName pointSize:font.pointSize withContentSizeCategory:contentSizeCategory];
+    // In iOS 13, UIFont(name:size:) is returning "Times New Roman", instead of the inputted font.
+    // This seems to be a bug from Apple's end: https://openradar.appspot.com/6153065
+    // Workaround here is to use UIFont(fontWithDescriptor:size:).
+    // We gate this to iOS 13 because the font created with UIFont(fontWithDescriptor:size:)
+    // works different from UIFont(name:size:) when a symbolic trait is applied.
+    
+    if (@available(iOS 13.0, *)) {
+        [self setFontDescriptor:font.fontDescriptor pointSize:font.pointSize withContentSizeCategory:contentSizeCategory];
+    } else {
+        [self setFontName:font.fontName pointSize:font.pointSize withContentSizeCategory:contentSizeCategory];
+    }
     
     self.initialFontSize = font.pointSize;
+}
+
+- (void)setFontDescriptor:(UIFontDescriptor *)fontDescriptor pointSize:(CGFloat)pointSize withContentSizeCategory:(NSString *)contentSizeCategory
+{
+    if (self.isDynamicTypeEnabled) {
+        pointSize += SLKPointSizeDifferenceForCategory(contentSizeCategory);
+    }
+    
+    UIFont *dynamicFont = [UIFont fontWithDescriptor:fontDescriptor size:pointSize];
+    [super setFont:dynamicFont];
+    
+    // Updates the placeholder font too
+    self.placeholderLabel.font = dynamicFont;
 }
 
 - (void)setFontName:(NSString *)fontName pointSize:(CGFloat)pointSize withContentSizeCategory:(NSString *)contentSizeCategory
